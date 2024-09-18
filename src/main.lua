@@ -32,6 +32,13 @@ function pop()
         return table.remove(stack) or 0
     end
 end
+function pushList(list)
+    assert(type(list) == "table", "sbpl_vm: pushList list wasn't a list but ".. type(list))
+    for i = #list, 1, -1 do
+        push(tonumber(list[i]))
+    end
+    push(#list)
+end
 
 function toBool(temp)
     return (temp == 0 and 0) or 1
@@ -121,6 +128,10 @@ local ops = {
         push(temp)
     end,
 
+    ["`"] = function ()
+        push(#stack)
+    end,
+
     ["@"] = function()
         for i, v in ipairs(stack) do
             print(i..": "..tostring(v))
@@ -136,7 +147,7 @@ local ops = {
     end,
 
     [","] = function()
-       io.write(string.char(pop()))
+        io.write(string.char(pop()))
     end,
 
     -- [""] = function()
@@ -151,72 +162,76 @@ local ifs = {}
 
 local i = 0
 
-while i < code:len() do
-    i = i + 1
-    local c = code:sub(i, i)
+function vm_run()
+    while i < code:len() do
+        i = i + 1
+        local c = code:sub(i, i)
 
-    if isWhiteSpace(c) then   goto vm_next   end
+        if isWhiteSpace(c) then   goto vm_next   end
 
-    if #ifs == 0 then
+        if #ifs == 0 then
 
-        if isDigit(c) then
-            local temp = number(i)
-            local num = tonumber(code:sub(i, temp))
-            i = temp
-            if Deb then  print(num)  end
-            push(num)
-        elseif c == '[' then
-            if Deb then  print('[')  end
-            table.insert(ls, {i, #stack})
-        elseif c == ']' then
-            if Deb then  print(']')  end
-            if #ls > 0 then
-                local index = #ls
-                local si = math.min(ls[index][2], #stack)
-                if si > 0 then
-                    if stack[si]~=0 then
-                        i = ls[index][1]
-                    else
-                        table.remove(ls)
+            if isDigit(c) then
+                local temp = number(i)
+                local num = tonumber(code:sub(i, temp))
+                i = temp
+                if Deb then  print(num)  end
+                push(num)
+            elseif c == '[' then
+                if Deb then  print('[')  end
+                table.insert(ls, {i, #stack})
+            elseif c == ']' then
+                if Deb then  print(']')  end
+                if #ls > 0 then
+                    local index = #ls
+                    local si = math.min(ls[index][2], #stack)
+                    if si > 0 then
+                        if stack[si]~=0 then
+                            i = ls[index][1]
+                        else
+                            table.remove(ls)
+                        end
                     end
                 end
+            elseif c == '(' then
+                if Deb then  print('(')  end
+                local temp = pop()
+                push(temp)
+                if temp == 0 then
+                    table.insert(ifs, {i, #stack-((gobackState and goback) or 0)})
+                end
+            elseif c == ')' then
+                if Deb then  print(')')  end
+            elseif type(ops[c]) == "function" then
+                if Deb then  print(c)  end
+                ops[c]()
+                if c ~= '.' and gobackState then
+                    gobackState = false
+                    goback = 0
+                end
+            else
+                print(c..'!')
             end
-        elseif c == '(' then
-            if Deb then  print('(')  end
-            local temp = pop()
-            push(temp)
-            if temp == 0 then
-                table.insert(ifs, {i, #stack-((gobackState and goback) or 0)})
-            end
-        elseif c == ')' then
-            if Deb then  print(')')  end
-        elseif type(ops[c]) == "function" then
-            if Deb then  print(c)  end
-            ops[c]()
-            if c ~= '.' and gobackState then
-                gobackState = false
-                goback = 0
-            end
+
         else
-            print(c..'!')
+
+            if c == '(' then
+                if Deb then  print('(_')  end
+                table.insert(ifs, {i, #stack})
+            elseif c == ')' then
+                if Deb then  print(')_')  end
+                table.remove(ifs)
+            end
+
         end
 
-    else
-
-        if c == '(' then
-            if Deb then  print('(_')  end
-            table.insert(ifs, {i, #stack})
-        elseif c == ')' then
-            if Deb then  print(')_')  end
-            table.remove(ifs)
-        end
-
+        ::vm_next::
     end
 
-    ::vm_next::
+    print("\n Stack:")
+    for i, v in ipairs(stack) do
+        print(i..": "..tostring(v))
+    end
 end
 
-print("\n Stack:")
-for i, v in ipairs(stack) do
-    print(i..": "..tostring(v))
-end
+
